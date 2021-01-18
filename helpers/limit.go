@@ -17,8 +17,7 @@ func CalculateLimit(ctx context.Context, defaultLimit, maximumLimit int, request
 		return defaultLimit, nil
 	}
 
-	var errorValues = make(map[string]string)
-	errorValues["limit"] = requestedLimit
+	errorValues := map[string]string{"limit": requestedLimit}
 
 	requestedLimitNumber, err := strconv.Atoi(requestedLimit)
 	if err != nil {

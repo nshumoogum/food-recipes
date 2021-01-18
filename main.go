@@ -154,7 +154,11 @@ func Download(ctx context.Context, url string, timeout time.Duration) error {
 
 		tags := strings.Split(line[5], "/")
 
+		title := strings.ReplaceAll(line[0], " ", "-")
+		lcTitle := strings.ToLower(title)
+
 		recipe := models.Recipe{
+			ID:          lcTitle,
 			Difficulty:  line[8],
 			Extras:      extras,
 			Favourite:   favourite,
@@ -177,7 +181,7 @@ func Download(ctx context.Context, url string, timeout time.Duration) error {
 			log.Event(ctx, "portion_size value unreadable", log.WARN, recipeLogData)
 		}
 
-		recipeData[line[0]] = recipe
+		recipeData[lcTitle] = recipe
 
 		count++
 	}

@@ -15,6 +15,5 @@ type ErrorObject struct {
 
 // CreateErrorObject formulates an error object from an error
 func CreateErrorObject(err error) *ErrorObject {
-
 	return &ErrorObject{Error: err.Error(), ErrorValues: err.(*errs.ErrorObject).Values()}
 }

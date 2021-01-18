@@ -15,6 +15,7 @@ type Recipe struct {
 	Difficulty  string       `json:"difficulty"`
 	Extras      []Ingredient `json:"extra_ingredients"`
 	Favourite   bool         `json:"favourite"`
+	ID          string       `json:"id"`
 	Ingredients []Ingredient `json:"ingredients"`
 	Location    Location     `json:"location"`
 	Notes       string       `json:"notes,omitempty"`

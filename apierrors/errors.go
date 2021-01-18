@@ -41,5 +41,10 @@ var (
 	ErrOffsetWrongType = errors.New("offset value needs to be a number")
 	ErrNegativeOffset  = errors.New("offset needs to be a positive number, offset cannot be lower than 0")
 
-	ErrInternalServer = errors.New("internal server error")
+	ErrRecipeNotFound      = errors.New("recipe not found")
+	ErrRecipeAlreadyExists = errors.New("recipe already exists, use different title")
+
+	ErrUnableToParseJSON   = errors.New("failed to parse json body")
+	ErrUnableToReadMessage = errors.New("failed to read message body")
+	ErrInternalServer      = errors.New("internal server error")
 )

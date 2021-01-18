@@ -12,9 +12,7 @@ import (
 
 // CalculateOffset returns a valid offset value to skip a list of items returned from query
 func CalculateOffset(ctx context.Context, requestedOffset string) (offset int, err error) {
-
-	errorValues := make(map[string](string))
-	errorValues["offset"] = requestedOffset
+	errorValues := map[string]string{"offset": requestedOffset}
 
 	if requestedOffset != "" {
 		offset, err = strconv.Atoi(requestedOffset)
