@@ -149,7 +149,6 @@ func (api *FoodRecipeAPI) createRecipe(w http.ResponseWriter, req *http.Request)
 
 	// TODO validate recipe fields
 
-	// TODO add recipe to map
 	api.RecipeData[recipe.ID] = *recipe
 
 	b, err := json.Marshal(recipe)
