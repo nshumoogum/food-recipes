@@ -1,10 +1,8 @@
-package helpers
+package models
 
 import (
 	"errors"
 	"strconv"
-
-	"github.com/nshumoogum/food-recipes/models"
 )
 
 // ErrorMaximumOffsetReached creates a unique error
@@ -21,13 +19,13 @@ type PageVariables struct {
 }
 
 // ValidatePage represents a model for validating combination of offset and limit
-func ValidatePage(page PageVariables) []*models.ErrorObject {
-	var errorObjects []*models.ErrorObject
+func ValidatePage(page PageVariables) []*ErrorObject {
+	var errorObjects []*ErrorObject
 
 	if page.Offset >= page.DefaultMaxResults {
 		pagingErrorValue := make(map[string](string))
 		pagingErrorValue["offset"] = strconv.Itoa(page.Offset)
-		errorObjects = append(errorObjects, &models.ErrorObject{Error: ErrorMaximumOffsetReached(page.DefaultMaxResults).Error(), ErrorValues: pagingErrorValue})
+		errorObjects = append(errorObjects, &ErrorObject{Error: ErrorMaximumOffsetReached(page.DefaultMaxResults).Error(), ErrorValues: pagingErrorValue})
 	}
 
 	if errorObjects != nil {

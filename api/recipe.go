@@ -36,17 +36,17 @@ func (api *FoodRecipeAPI) getRecipes(w http.ResponseWriter, req *http.Request) {
 		errorObjects = append(errorObjects, &models.ErrorObject{Error: err.Error(), ErrorValues: err.(*errs.ErrorObject).Values()})
 	}
 
-	page := helpers.PageVariables{
+	page := models.PageVariables{
 		DefaultMaxResults: api.DefaultMaxResults,
 		Limit:             limit,
 		Offset:            offset,
 	}
 
-	if errorObject := helpers.ValidatePage(page); errorObject != nil {
+	if errorObject := models.ValidatePage(page); errorObject != nil {
 		errorObjects = append(errorObjects, errorObject...)
 	}
 
-	if errorObjects != nil {
+	if len(errorObjects) != 0 {
 		ErrorResponse(ctx, w, http.StatusBadRequest, &models.ErrorResponse{Errors: errorObjects})
 		return
 	}
@@ -147,7 +147,11 @@ func (api *FoodRecipeAPI) createRecipe(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	// TODO validate recipe fields
+	// validate recipe fields
+	if errorObjects = recipe.Validate(); len(errorObjects) != 0 {
+		ErrorResponse(ctx, w, http.StatusBadRequest, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
 
 	api.RecipeData[recipe.ID] = *recipe
 

@@ -44,6 +44,10 @@ var (
 	ErrRecipeNotFound      = errors.New("recipe not found")
 	ErrRecipeAlreadyExists = errors.New("recipe already exists, use different title")
 
+	ErrMissingFields      = errors.New("missing mandatory fields")
+	ErrInvalidUnits       = errors.New("invalid units for ingredient")
+	ErrInvalidPortionSize = errors.New("invalid portion size, cannot be less than 1")
+
 	ErrUnableToParseJSON   = errors.New("failed to parse json body")
 	ErrUnableToReadMessage = errors.New("failed to read message body")
 	ErrInternalServer      = errors.New("internal server error")
