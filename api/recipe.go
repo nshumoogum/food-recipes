@@ -89,7 +89,7 @@ func (api *FoodRecipeAPI) getRecipes(w http.ResponseWriter, req *http.Request) {
 			}
 			limitCounter++
 
-			item := models.Recipe{}
+			item := &models.Recipe{}
 
 			err := cur.Decode(item)
 			if err != nil {
@@ -99,7 +99,7 @@ func (api *FoodRecipeAPI) getRecipes(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 
-			list.Items = append(list.Items, item)
+			list.Items = append(list.Items, *item)
 		}
 		if err := cur.Err(); err != nil {
 			log.Event(ctx, "get recipes: mongo db cursor error", log.ERROR, log.Error(err))
