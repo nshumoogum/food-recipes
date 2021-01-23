@@ -9,20 +9,21 @@ import (
 	"github.com/ONSdigital/log.go/log"
 	"github.com/gorilla/mux"
 	"github.com/nshumoogum/food-recipes/models"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // FoodRecipeAPI manages access to food recipes
 type FoodRecipeAPI struct {
 	DefaultMaxResults int
-	RecipeData        map[string]models.Recipe
+	MongoClient       *mongo.Client
 	Router            *mux.Router
 }
 
 // NewFoodRecipeAPI create a new Food Recipe API instance and register the API routes based on the application configuration.
-func NewFoodRecipeAPI(ctx context.Context, data map[string]models.Recipe, defaultMaxResults int, router *mux.Router) *FoodRecipeAPI {
+func NewFoodRecipeAPI(ctx context.Context, mongoClient *mongo.Client, data map[string]models.Recipe, defaultMaxResults int, router *mux.Router) *FoodRecipeAPI {
 	api := &FoodRecipeAPI{
 		DefaultMaxResults: defaultMaxResults,
-		RecipeData:        data,
+		MongoClient:       mongoClient,
 		Router:            router,
 	}
 

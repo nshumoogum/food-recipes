@@ -1,10 +1,9 @@
 package models
 
 import (
-	"context"
 	"strconv"
+	"strings"
 
-	"github.com/ONSdigital/log.go/log"
 	errs "github.com/nshumoogum/food-recipes/apierrors"
 	"github.com/nshumoogum/food-recipes/helpers"
 )
@@ -15,36 +14,36 @@ type Recipes struct {
 	Items      []Recipe `json:"items"`
 	Limit      int      `json:"limit"`
 	Offset     int      `json:"offset"`
-	TotalCount int      `json:"total_count"`
+	TotalCount int64    `json:"total_count"`
 }
 
 // Recipe ...
 type Recipe struct {
-	CookTime    int          `json:"cook_time"`
-	Difficulty  string       `json:"difficulty"`
-	Extras      []Ingredient `json:"extra_ingredients"`
-	Favourite   bool         `json:"favourite"`
-	ID          string       `json:"id"`
-	Ingredients []Ingredient `json:"ingredients"`
-	Location    Location     `json:"location"`
-	Notes       string       `json:"notes,omitempty"`
-	PortionSize int          `json:"portion_size"`
-	Tags        []string     `json:"tags,omitempty"`
-	Title       string       `json:"title"`
+	CookTime    int          `bson:"cook_time"                   json:"cook_time"`
+	Difficulty  string       `bson:"difficulty"                  json:"difficulty"`
+	Extras      []Ingredient `bson:"extra_ingredients,omitempty" json:"extra_ingredients,omitempty"`
+	Favourite   bool         `bson:"favourite"                   json:"favourite"`
+	ID          string       `bson:"_id"                         json:"id"`
+	Ingredients []Ingredient `bson:"ingredients"                 json:"ingredients"`
+	Location    Location     `bson:"location"                    json:"location"`
+	Notes       string       `bson:"notes,omitempty"             json:"notes,omitempty"`
+	PortionSize int          `bson:"portion_size"                json:"portion_size"`
+	Tags        []string     `bson:"tags,omitempty"              json:"tags,omitempty"`
+	Title       string       `bson:"title"                       json:"title"`
 }
 
 // Location ...
 type Location struct {
-	CookBook string `json:"cook_book,omitempty"`
-	Link     string `json:"link"`
-	Page     int    `json:"page,omitempty"`
+	CookBook string `bson:"cook_book,omitempty" json:"cook_book,omitempty"`
+	Link     string `bson:"link,omitempty"      json:"link,omitempty"`
+	Page     int    `bson:"page,omitempty"      json:"page,omitempty"`
 }
 
 // Ingredient ...
 type Ingredient struct {
-	Item     string `json:"item"`
-	Quantity int    `json:"quantity"`
-	Unit     string `json:"unit,omitempty"`
+	Item     string `bson:"item"           json:"item"`
+	Quantity int    `bson:"quantity"       json:"quantity"`
+	Unit     string `bson:"unit,omitempty" json:"unit,omitempty"`
 }
 
 var difficulty = map[string]bool{
@@ -54,7 +53,6 @@ var difficulty = map[string]bool{
 }
 
 var validUnits = map[string]bool{
-	"none": true,
 	"ml":   true,
 	"l":    true,
 	"g":    true,
@@ -72,21 +70,27 @@ func (recipe *Recipe) Validate() []*ErrorObject {
 		missingFields []string
 		invalidUnits  = make(map[string]string)
 	)
-	log.Event(context.Background(), "got error object 1", log.WARN, log.Data{"error": errorObjects})
 
 	if recipe.CookTime == 0 {
 		missingFields = append(missingFields, "cook_time")
 	}
 
-	if !difficulty[recipe.Difficulty] {
+	lcDiff := strings.ToLower(recipe.Difficulty)
+	if !difficulty[lcDiff] {
 		invalidDifficulty := map[string]string{"difficulty": recipe.Difficulty}
 		errorObjects = append(errorObjects, &ErrorObject{Error: errs.ErrMissingFields.Error(), ErrorValues: invalidDifficulty})
 	}
 
+	// use lower case difficulty value
+	recipe.Difficulty = lcDiff
+
 	missingFields = append(missingFields, validateIngredients("extra_ingredients", recipe.Extras, invalidUnits)...)
 
+	if len(recipe.Ingredients) == 0 {
+		missingFields = append(missingFields, "ingredients")
+	}
+
 	missingFields = append(missingFields, validateIngredients("ingredients", recipe.Ingredients, invalidUnits)...)
-	log.Event(context.Background(), "got error object 2", log.WARN, log.Data{"error": errorObjects})
 
 	if errorObject := validateLocation(recipe.Location); errorObject != nil {
 		errorObjects = append(errorObjects, errorObject)
@@ -98,6 +102,10 @@ func (recipe *Recipe) Validate() []*ErrorObject {
 
 	if recipe.PortionSize < 0 {
 		errorObjects = append(errorObjects, &ErrorObject{Error: errs.ErrInvalidPortionSize.Error(), ErrorValues: map[string]string{"portion_size": strconv.Itoa(recipe.PortionSize)}})
+	}
+
+	if recipe.Title == "" {
+		missingFields = append(missingFields, "title")
 	}
 
 	if len(missingFields) > 0 {
@@ -126,8 +134,10 @@ func validateIngredients(fieldName string, ingredients []Ingredient, invalidUnit
 			missingFields = append(missingFields, fieldName+".["+strconv.Itoa(i)+"].quantity")
 		}
 
-		if !validUnits[ingredient.Unit] {
-			invalidUnits[fieldName+".["+strconv.Itoa(i)+"].unit"] = ingredient.Item
+		if ingredient.Unit != "" {
+			if !validUnits[ingredient.Unit] {
+				invalidUnits[fieldName+".["+strconv.Itoa(i)+"].unit"] = ingredient.Item
+			}
 		}
 	}
 
