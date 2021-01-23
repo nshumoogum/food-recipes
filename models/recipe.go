@@ -35,7 +35,7 @@ type Recipe struct {
 
 // Location ...
 type Location struct {
-	CookBook string `json:"cook_book"`
+	CookBook string `json:"cook_book,omitempty"`
 	Link     string `json:"link"`
 	Page     int    `json:"page,omitempty"`
 }
