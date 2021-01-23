@@ -1,0 +1,9 @@
+{
+  "name": "Food recipe API service using go",
+  "description": "API to allow adding, updating and retrieving food recipes.",
+  "keywords": [
+    "api",
+    "go"
+  ],
+  "repository": "https://github.com/nshumoogum/food-recipes"
+}
