@@ -6,6 +6,7 @@ import (
 
 	dphttp "github.com/ONSdigital/dp-net/http"
 	"github.com/ONSdigital/go-ns/server"
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/ONSdigital/log.go/log"
 	"github.com/gorilla/mux"
@@ -37,16 +38,18 @@ type Closer interface {
 
 // Service contains all the configs, server and clients to run the Dataset API
 type Service struct {
-	config *config.Configuration
-	api    *api.FoodRecipeAPI
-	server HTTPServer
+	api         *api.FoodRecipeAPI
+	config      *config.Configuration
+	mongoClient *mongo.Client
+	server      HTTPServer
 }
 
 // New creates a new service
-func New(cfg *config.Configuration) *Service {
+func New(cfg *config.Configuration, mongoClient *mongo.Client) *Service {
 	svc := &Service{
-		api:    &api.FoodRecipeAPI{},
-		config: cfg,
+		api:         &api.FoodRecipeAPI{},
+		config:      cfg,
+		mongoClient: mongoClient,
 	}
 
 	return svc
@@ -63,7 +66,7 @@ var getHTTPServer = func(bindAddr string, router http.Handler) HTTPServer {
 func (svc *Service) Run(ctx context.Context, recipeData map[string]models.Recipe, svcErrors chan error) (err error) {
 	// Get HTTP router and server with middleware
 	router := mux.NewRouter()
-	svc.api = api.NewFoodRecipeAPI(ctx, recipeData, svc.config.DefaultMaxResults, router)
+	svc.api = api.NewFoodRecipeAPI(ctx, svc.mongoClient, recipeData, svc.config.DefaultMaxResults, router)
 
 	server := server.New(svc.config.BindAddr, router)
 
@@ -81,28 +84,6 @@ func (svc *Service) Run(ctx context.Context, recipeData map[string]models.Recipe
 
 	return nil
 }
-
-// //CreateAndInitialiseRecipeAPI create a new RecipeAPI instance based on the configuration provided and starts the HTTP server.
-// func CreateAndInitialiseRecipeAPI(ctx context.Context, cfg config.Configuration, dataStore store.DataStore, hc *healthcheck.HealthCheck, errorChan chan error, permissions AuthHandler) {
-// 	router := mux.NewRouter()
-// 	api := NewRecipeAPI(ctx, cfg, router, dataStore, permissions)
-
-// 	healthcheckHandler := newMiddleware(hc.Handler)
-// 	middleware := alice.New(healthcheckHandler)
-
-// 	srv = server.New(cfg.BindAddr, middleware.Then(api.Router))
-
-// 	// Disable this here to allow main to manage graceful shutdown of the entire app.
-// 	srv.HandleOSSignals = false
-
-// 	go func() {
-// 		log.Event(ctx, "starting http server", log.INFO, log.Data{"bind_addr": cfg.BindAddr})
-// 		if err := srv.ListenAndServe(); err != nil {
-// 			log.Event(ctx, "error starting http server for API", log.FATAL, log.Error(err))
-// 			errorChan <- err
-// 		}
-// 	}()
-// }
 
 // Close gracefully shuts the service down in the required order, with timeout
 func (svc *Service) Close(ctx context.Context) error {

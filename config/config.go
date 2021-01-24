@@ -15,6 +15,14 @@ type Configuration struct {
 	DownloadTimeout         time.Duration `envconfig:"DOWNLOAD_TIMEOUT"`
 	GSURL                   string        `envconfig:"GOOGLE_SHEET_URL"`
 	GracefulShutdownTimeout time.Duration `envconfig:"GRACEFUL_SHUTDOWN_TIMEOUT"`
+	MongoConfig             MongoConfig
+}
+
+// MongoConfig contains the config required to connect to MongoDB.
+type MongoConfig struct {
+	BindAddr   string `envconfig:"MONGODB_BIND_ADDR"   json:"-"`
+	Collection string `envconfig:"MONGODB_COLLECTION"`
+	Database   string `envconfig:"MONGODB_DATABASE"`
 }
 
 var cfg *Configuration
@@ -32,6 +40,11 @@ func Get() (*Configuration, error) {
 		DownloadTimeout:         5 * time.Second,
 		GSURL:                   "",
 		GracefulShutdownTimeout: 5 * time.Second,
+		MongoConfig: MongoConfig{
+			BindAddr:   "mongodb://localhost:27017",
+			Collection: "recipes",
+			Database:   "food-recipes",
+		},
 	}
 
 	return cfg, envconfig.Process("", cfg)

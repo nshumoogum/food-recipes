@@ -13,6 +13,8 @@ import (
 	errs "github.com/nshumoogum/food-recipes/apierrors"
 	"github.com/nshumoogum/food-recipes/helpers"
 	"github.com/nshumoogum/food-recipes/models"
+	"go.mongodb.org/mongo-driver/mongo"
+	"gopkg.in/mgo.v2/bson"
 )
 
 const defaultLimit = 20
@@ -54,32 +56,67 @@ func (api *FoodRecipeAPI) getRecipes(w http.ResponseWriter, req *http.Request) {
 	var list models.Recipes
 	list.Items = []models.Recipe{}
 
-	recipes := api.RecipeData
+	collection := api.MongoClient.Database("food-recipes").Collection("recipes")
 
-	var offsetCounter, limitCounter int
-	for _, item := range recipes {
-		offsetCounter++
-		if offsetCounter <= page.Offset {
-			continue
+	count, err := collection.CountDocuments(ctx, bson.M{})
+	if err != nil {
+		log.Event(ctx, "get recipes: error returned attempting to count documents", log.ERROR, log.Error(err))
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+		ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	if count > 0 {
+		cur, err := collection.Find(ctx, bson.M{})
+		if err != nil {
+			log.Event(ctx, "get recipes: error returned retrieving a list of recipes", log.ERROR, log.Error(err))
+			errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+			ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+			return
 		}
+		defer cur.Close(ctx)
 
-		if limitCounter >= page.Limit {
-			break
+		var offsetCounter, limitCounter int
+
+		for cur.Next(ctx) {
+			offsetCounter++
+			if offsetCounter <= page.Offset {
+				continue
+			}
+
+			if limitCounter >= page.Limit {
+				break
+			}
+			limitCounter++
+
+			item := &models.Recipe{}
+
+			err := cur.Decode(item)
+			if err != nil {
+				log.Event(ctx, "get recipes: unable to decode recipe", log.ERROR, log.Error(err))
+				errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+				ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+				return
+			}
+
+			list.Items = append(list.Items, *item)
 		}
-		limitCounter++
-
-		// Add item
-		list.Items = append(list.Items, item)
+		if err := cur.Err(); err != nil {
+			log.Event(ctx, "get recipes: mongo db cursor error", log.ERROR, log.Error(err))
+			errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+			ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+			return
+		}
 	}
 
 	list.Count = len(list.Items)
 	list.Limit = page.Limit
 	list.Offset = page.Offset
-	list.TotalCount = len(recipes)
+	list.TotalCount = count
 
 	b, err := json.Marshal(list)
 	if err != nil {
-		log.Event(ctx, "error returned from json marshal", log.ERROR, log.Error(err))
+		log.Event(ctx, "get recipes: error returned from json marshal", log.ERROR, log.Error(err))
 		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
 		ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
 		return
@@ -99,18 +136,27 @@ func (api *FoodRecipeAPI) getRecipe(w http.ResponseWriter, req *http.Request) {
 	id := vars["id"]
 	logData := log.Data{"id": id}
 
-	recipe := api.RecipeData[id]
-
+	var recipe models.Recipe
 	var errorObjects []*models.ErrorObject
 
-	if recipe.ID != id {
-		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrRecipeNotFound.Error(), ErrorValues: map[string]string{"id": id}})
-		ErrorResponse(ctx, w, http.StatusNotFound, &models.ErrorResponse{Errors: errorObjects})
+	collection := api.MongoClient.Database("food-recipes").Collection("recipes")
+	if err := collection.FindOne(ctx, bson.M{"_id": id}).Decode(&recipe); err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Event(ctx, "get recipes: failed to find recipe", log.WARN, log.Error(err), logData)
+			errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrRecipeNotFound.Error()})
+			ErrorResponse(ctx, w, http.StatusNotFound, &models.ErrorResponse{Errors: errorObjects})
+			return
+		}
+
+		log.Event(ctx, "get recipes: failed to find recipe, bad connection?", log.ERROR, log.Error(err))
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+		ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
 		return
 	}
 
 	b, err := json.Marshal(recipe)
 	if err != nil {
+
 		log.Event(ctx, "error returned from json marshal", log.ERROR, log.Error(err), logData)
 		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
 		ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
@@ -139,21 +185,27 @@ func (api *FoodRecipeAPI) createRecipe(w http.ResponseWriter, req *http.Request)
 	recipe.ID = strings.ToLower(strings.ReplaceAll(recipe.Title, " ", "-"))
 	logData := log.Data{"id": recipe.ID}
 
-	r := api.RecipeData[recipe.ID]
-
-	if r.ID == recipe.ID {
-		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrRecipeAlreadyExists.Error(), ErrorValues: map[string]string{"title": recipe.Title}})
-		ErrorResponse(ctx, w, http.StatusConflict, &models.ErrorResponse{Errors: errorObjects})
-		return
-	}
-
 	// validate recipe fields
 	if errorObjects = recipe.Validate(); len(errorObjects) != 0 {
 		ErrorResponse(ctx, w, http.StatusBadRequest, &models.ErrorResponse{Errors: errorObjects})
 		return
 	}
 
-	api.RecipeData[recipe.ID] = *recipe
+	collection := api.MongoClient.Database("food-recipes").Collection("recipes")
+
+	if _, err = collection.InsertOne(ctx, recipe); err != nil {
+		if strings.Contains(err.Error(), "E11000 duplicate key error collection") {
+			log.Event(ctx, "add recipe: failed to insert recipe, recipe already exists", log.ERROR, log.Error(err), logData)
+			errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrRecipeAlreadyExists.Error()})
+			ErrorResponse(ctx, w, http.StatusConflict, &models.ErrorResponse{Errors: errorObjects})
+			return
+		}
+
+		log.Event(ctx, "add recipe: failed to insert recipe", log.ERROR, log.Error(err), logData)
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+		ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
 
 	b, err := json.Marshal(recipe)
 	if err != nil {

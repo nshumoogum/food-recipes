@@ -19,6 +19,8 @@ import (
 	"github.com/nshumoogum/food-recipes/models"
 	"github.com/nshumoogum/food-recipes/service"
 	"github.com/pkg/errors"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const serviceName = "food-recipes"
@@ -53,11 +55,16 @@ func run(ctx context.Context) error {
 		}
 	}
 
+	mongoClient, err := getMongoClient(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
 	// Create the service, providing an error channel for fatal errors
 	svcErrors := make(chan error, 1)
 
 	// Run the service
-	svc := service.New(cfg)
+	svc := service.New(cfg, mongoClient)
 	if err := svc.Run(ctx, recipeData, svcErrors); err != nil {
 		return errors.Wrap(err, "running service failed")
 	}
@@ -198,7 +205,6 @@ func getIngredients(ctx context.Context, cell string, logData log.Data) (ingredi
 	}
 
 	ingredients := strings.Split(strings.ReplaceAll(cell, ")", ""), "(")
-	log.Event(ctx, "what do we have", log.Data{"ingredients": ingredients})
 
 	for _, ingredient := range ingredients {
 		if ingredient == "" {
@@ -206,7 +212,6 @@ func getIngredients(ctx context.Context, cell string, logData log.Data) (ingredi
 		}
 
 		logData["ingredient"] = ingredient
-		log.Event(ctx, "what do we have", logData)
 		ingredientParts := strings.Split(ingredient, ":")
 
 		quantity, err := strconv.Atoi(ingredientParts[1])
@@ -223,4 +228,19 @@ func getIngredients(ctx context.Context, cell string, logData log.Data) (ingredi
 	}
 
 	return
+}
+
+func getMongoClient(ctx context.Context, cfg *config.Configuration) (*mongo.Client, error) {
+	mongoCTX, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(mongoCTX, options.Client().ApplyURI(
+		cfg.MongoConfig.BindAddr+"/"+cfg.MongoConfig.Database+"?retryWrites=true&w=majority",
+	))
+	if err != nil {
+		log.Event(ctx, "failed to create mongo client", log.ERROR, log.Error(err))
+		return nil, err
+	}
+
+	return client, nil
 }
