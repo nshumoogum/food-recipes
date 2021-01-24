@@ -292,7 +292,7 @@ func (api *FoodRecipeAPI) removeRecipe(w http.ResponseWriter, req *http.Request)
 	}
 
 	if res.DeletedCount == 0 {
-		log.Event(ctx, "delete recipe: failed to remove recipe as it does not exist", log.WARN, log.Error(err), logData)
+		log.Event(ctx, "delete recipe: failed to remove recipe as it does not exist", log.WARN, logData)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
