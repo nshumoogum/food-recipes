@@ -19,11 +19,25 @@ type Recipes struct {
 
 // Recipe ...
 type Recipe struct {
+	ID          string       `bson:"_id,omitempty"               json:"id"`
 	CookTime    int          `bson:"cook_time"                   json:"cook_time"`
 	Difficulty  string       `bson:"difficulty"                  json:"difficulty"`
 	Extras      []Ingredient `bson:"extra_ingredients,omitempty" json:"extra_ingredients,omitempty"`
 	Favourite   bool         `bson:"favourite"                   json:"favourite"`
-	ID          string       `bson:"_id"                         json:"id"`
+	Ingredients []Ingredient `bson:"ingredients"                 json:"ingredients"`
+	Location    Location     `bson:"location"                    json:"location"`
+	Notes       string       `bson:"notes,omitempty"             json:"notes,omitempty"`
+	PortionSize int          `bson:"portion_size"                json:"portion_size"`
+	Tags        []string     `bson:"tags,omitempty"              json:"tags,omitempty"`
+	Title       string       `bson:"title"                       json:"title"`
+}
+
+// UpdateRecipe ...
+type UpdateRecipe struct {
+	CookTime    int          `bson:"cook_time"                   json:"cook_time"`
+	Difficulty  string       `bson:"difficulty"                  json:"difficulty"`
+	Extras      []Ingredient `bson:"extra_ingredients,omitempty" json:"extra_ingredients,omitempty"`
+	Favourite   bool         `bson:"favourite"                   json:"favourite"`
 	Ingredients []Ingredient `bson:"ingredients"                 json:"ingredients"`
 	Location    Location     `bson:"location"                    json:"location"`
 	Notes       string       `bson:"notes,omitempty"             json:"notes,omitempty"`
@@ -65,6 +79,29 @@ var validUnits = map[string]bool{
 
 // Validate recipe creation
 func (recipe *Recipe) Validate() []*ErrorObject {
+	return validate(recipe, false)
+}
+
+// Validate recipe creation
+func (updateRecipe *UpdateRecipe) Validate() []*ErrorObject {
+
+	recipe := &Recipe{
+		CookTime:    updateRecipe.CookTime,
+		Difficulty:  updateRecipe.Difficulty,
+		Extras:      updateRecipe.Extras,
+		Favourite:   updateRecipe.Favourite,
+		Ingredients: updateRecipe.Ingredients,
+		Location:    updateRecipe.Location,
+		Notes:       updateRecipe.Notes,
+		PortionSize: updateRecipe.PortionSize,
+		Tags:        updateRecipe.Tags,
+		Title:       updateRecipe.Title,
+	}
+
+	return validate(recipe, true)
+}
+
+func validate(recipe *Recipe, isUpdate bool) []*ErrorObject {
 	var (
 		errorObjects  []*ErrorObject
 		missingFields []string
@@ -104,8 +141,10 @@ func (recipe *Recipe) Validate() []*ErrorObject {
 		errorObjects = append(errorObjects, &ErrorObject{Error: errs.ErrInvalidPortionSize.Error(), ErrorValues: map[string]string{"portion_size": strconv.Itoa(recipe.PortionSize)}})
 	}
 
-	if recipe.Title == "" {
+	if !isUpdate && recipe.Title == "" {
 		missingFields = append(missingFields, "title")
+	} else if isUpdate && recipe.Title != "" {
+		errorObjects = append(errorObjects, &ErrorObject{Error: errs.ErrUnableToChangeTitle.Error(), ErrorValues: map[string]string{"title": recipe.Title}})
 	}
 
 	if len(missingFields) > 0 {

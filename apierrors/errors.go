@@ -44,9 +44,10 @@ var (
 	ErrRecipeNotFound      = errors.New("recipe not found")
 	ErrRecipeAlreadyExists = errors.New("recipe already exists, use different title")
 
-	ErrMissingFields      = errors.New("missing mandatory fields")
-	ErrInvalidUnits       = errors.New("invalid units for ingredient")
-	ErrInvalidPortionSize = errors.New("invalid portion size, cannot be less than 1")
+	ErrMissingFields       = errors.New("missing mandatory fields")
+	ErrInvalidUnits        = errors.New("invalid units for ingredient")
+	ErrInvalidPortionSize  = errors.New("invalid portion size, cannot be less than 1")
+	ErrUnableToChangeTitle = errors.New("not allowed to change the existing title for recipe")
 
 	ErrUnableToParseJSON   = errors.New("failed to parse json body")
 	ErrUnableToReadMessage = errors.New("failed to read message body")

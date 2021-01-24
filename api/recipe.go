@@ -191,6 +191,8 @@ func (api *FoodRecipeAPI) createRecipe(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	recipe.Title = strings.Title(recipe.Title)
+
 	collection := api.MongoClient.Database("food-recipes").Collection("recipes")
 
 	if _, err = collection.InsertOne(ctx, recipe); err != nil {
@@ -223,7 +225,80 @@ func (api *FoodRecipeAPI) createRecipe(w http.ResponseWriter, req *http.Request)
 }
 
 func (api *FoodRecipeAPI) updateRecipe(w http.ResponseWriter, req *http.Request) {
-	// ctx := req.Context()
+	defer DrainBody(req)
+	ctx := req.Context()
+
+	vars := mux.Vars(req)
+	id := vars["id"]
+	logData := log.Data{"id": id}
+
+	var errorObjects []*models.ErrorObject
+
+	recipe, err := unmarshalUpdateRecipe(ctx, req.Body)
+	if err != nil {
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: err.Error()})
+		ErrorResponse(ctx, w, http.StatusBadRequest, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	// validate recipe fields
+	if errorObjects = recipe.Validate(); len(errorObjects) != 0 {
+		ErrorResponse(ctx, w, http.StatusBadRequest, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	recipe.Title = strings.Title(strings.ReplaceAll(id, "-", " "))
+
+	collection := api.MongoClient.Database("food-recipes").Collection("recipes")
+
+	if _, err = collection.ReplaceOne(ctx, bson.M{"_id": id}, recipe); err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Event(ctx, "update recipe: failed to update recipe, recipe deos not exists", log.ERROR, log.Error(err), logData)
+			errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrRecipeNotFound.Error()})
+			ErrorResponse(ctx, w, http.StatusNotFound, &models.ErrorResponse{Errors: errorObjects})
+			return
+		}
+
+		log.Event(ctx, "update recipe: failed to insert recipe", log.ERROR, log.Error(err), logData)
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+		ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	log.Event(ctx, "update recipe: request successful", log.INFO, logData)
+}
+
+func (api *FoodRecipeAPI) removeRecipe(w http.ResponseWriter, req *http.Request) {
+	defer DrainBody(req)
+	ctx := req.Context()
+
+	vars := mux.Vars(req)
+	id := vars["id"]
+	logData := log.Data{"id": id}
+
+	var errorObjects []*models.ErrorObject
+
+	collection := api.MongoClient.Database("food-recipes").Collection("recipes")
+
+	res, err := collection.DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		log.Event(ctx, "delete recipe: failed to remove recipe", log.ERROR, log.Error(err), logData)
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+		ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	if res.DeletedCount == 0 {
+		log.Event(ctx, "delete recipe: failed to remove recipe as it does not exist", log.WARN, log.Error(err), logData)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNoContent)
+
+	log.Event(ctx, "delete recipe: request successful", log.INFO, logData)
 }
 
 func unmarshalRecipe(ctx context.Context, reader io.Reader) (*models.Recipe, error) {
@@ -233,6 +308,21 @@ func unmarshalRecipe(ctx context.Context, reader io.Reader) (*models.Recipe, err
 	}
 
 	var recipe models.Recipe
+	err = json.Unmarshal(b, &recipe)
+	if err != nil {
+		return nil, errs.ErrUnableToParseJSON
+	}
+
+	return &recipe, nil
+}
+
+func unmarshalUpdateRecipe(ctx context.Context, reader io.Reader) (*models.UpdateRecipe, error) {
+	b, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, errs.ErrUnableToReadMessage
+	}
+
+	var recipe models.UpdateRecipe
 	err = json.Unmarshal(b, &recipe)
 	if err != nil {
 		return nil, errs.ErrUnableToParseJSON

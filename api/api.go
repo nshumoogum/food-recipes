@@ -30,7 +30,8 @@ func NewFoodRecipeAPI(ctx context.Context, mongoClient *mongo.Client, data map[s
 	api.Router.HandleFunc("/recipes", api.createRecipe).Methods("POST")
 	api.Router.HandleFunc("/recipes", api.getRecipes).Methods("GET")
 	api.Router.HandleFunc("/recipes/{id}", api.getRecipe).Methods("GET")
-	api.Router.HandleFunc("/recipe/{id}", api.updateRecipe).Methods("PATCH")
+	api.Router.HandleFunc("/recipes/{id}", api.updateRecipe).Methods("PUT")
+	api.Router.HandleFunc("/recipes/{id}", api.removeRecipe).Methods("DELETE")
 
 	return api
 }
