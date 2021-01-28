@@ -10,6 +10,7 @@ import (
 // Configuration structure which hold information for configuring the import API
 type Configuration struct {
 	BindAddr                string        `envconfig:"BIND_ADDR"`
+	ConnectionString        string        `envconfig:"CONNECTION_STRING"          json:"-"`
 	DefaultMaxResults       int           `envconfig:"DEFAULT_MAX_RESULTS"`
 	DownloadData            bool          `envconfig:"DOWNLOAD_DATA"`
 	DownloadTimeout         time.Duration `envconfig:"DOWNLOAD_TIMEOUT"`
@@ -35,6 +36,7 @@ func Get() (*Configuration, error) {
 
 	cfg = &Configuration{
 		BindAddr:                ":30000",
+		ConnectionString:        "",
 		DefaultMaxResults:       50,
 		DownloadData:            false,
 		DownloadTimeout:         5 * time.Second,

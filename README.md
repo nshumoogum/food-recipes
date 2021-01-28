@@ -12,6 +12,7 @@ The food recipe API can be run by running `make debug`.
 | Environment variable         | Default                                | Description
 | ---------------------------- | ---------------------------------------| -----------
 | BIND_ADDR                    | :30000                                 | The host and port to bind to
+| CONNECTION_STRING            | ""                                     | Unique key to allow access to write endpoints. Should be set to something
 | DOWNLOAD_DATA                | false                                  | Flag to determine whether to attempt to download recipes from google sheet
 | DOWNLOAD_TIMEOUT             | 5s                                     | The download google sheet timeout in seconds
 | GOOGLE_SHEET_URL             | ""                                     | The published url for the google sheet containing recipes 
