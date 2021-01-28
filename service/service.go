@@ -66,7 +66,7 @@ var getHTTPServer = func(bindAddr string, router http.Handler) HTTPServer {
 func (svc *Service) Run(ctx context.Context, recipeData map[string]models.Recipe, svcErrors chan error) (err error) {
 	// Get HTTP router and server with middleware
 	router := mux.NewRouter()
-	svc.api = api.NewFoodRecipeAPI(ctx, svc.mongoClient, recipeData, svc.config.DefaultMaxResults, router)
+	svc.api = api.NewFoodRecipeAPI(ctx, svc.config.ConnectionString, svc.mongoClient, recipeData, svc.config.DefaultMaxResults, router)
 
 	server := server.New(svc.config.BindAddr, router)
 
