@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/ONSdigital/log.go/log"
+	"github.com/ONSdigital/log.go/v2/log"
 	errs "github.com/nshumoogum/food-recipes/apierrors"
 	"github.com/pkg/errors"
 )
@@ -21,19 +21,19 @@ func CalculateLimit(ctx context.Context, defaultLimit, maximumLimit int, request
 
 	requestedLimitNumber, err := strconv.Atoi(requestedLimit)
 	if err != nil {
-		log.Event(ctx, "invalid limit value", log.ERROR, log.Error(errors.WithMessage(err, errs.ErrLimitWrongType.Error())), log.Data{"requested_limit": requestedLimitNumber})
+		log.Error(ctx, "invalid limit value", errors.WithMessage(err, errs.ErrLimitWrongType.Error()), log.Data{"requested_limit": requestedLimitNumber})
 		return 0, errs.New(errs.ErrLimitWrongType, http.StatusBadRequest, errorValues)
 	}
 
 	if requestedLimitNumber < 0 {
-		log.Event(ctx, "invalid limit value", log.ERROR, log.Error(errs.ErrNegativeLimit), log.Data{"requested_limit": requestedLimitNumber})
+		log.Error(ctx, "invalid limit value", errs.ErrNegativeLimit, log.Data{"requested_limit": requestedLimitNumber})
 		return 0, errs.New(errs.ErrNegativeLimit, http.StatusBadRequest, errorValues)
 	}
 
 	if requestedLimitNumber > maximumLimit {
 		err := fmt.Errorf("limit exceeded maximum value, limit cannot be greater than [%d]", maximumLimit)
 
-		log.Event(ctx, "invalid limit value", log.ERROR, log.Error(err), log.Data{"requested_limit": requestedLimitNumber})
+		log.Error(ctx, "invalid limit value", err, log.Data{"requested_limit": requestedLimitNumber})
 		return 0, errs.New(err, http.StatusBadRequest, errorValues)
 	}
 

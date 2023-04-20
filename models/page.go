@@ -23,7 +23,7 @@ func ValidatePage(page PageVariables) []*ErrorObject {
 	var errorObjects []*ErrorObject
 
 	if page.Offset >= page.DefaultMaxResults {
-		pagingErrorValue := make(map[string](string))
+		pagingErrorValue := make(map[string]string)
 		pagingErrorValue["offset"] = strconv.Itoa(page.Offset)
 		errorObjects = append(errorObjects, &ErrorObject{Error: ErrorMaximumOffsetReached(page.DefaultMaxResults).Error(), ErrorValues: pagingErrorValue})
 	}
