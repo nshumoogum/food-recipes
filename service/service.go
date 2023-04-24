@@ -4,11 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	dphttp "github.com/ONSdigital/dp-net/http"
 	"github.com/ONSdigital/go-ns/server"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/ONSdigital/log.go/log"
+	"github.com/ONSdigital/log.go/v2/log"
 	"github.com/gorilla/mux"
 	"github.com/nshumoogum/food-recipes/api"
 	"github.com/nshumoogum/food-recipes/config"
@@ -55,25 +54,18 @@ func New(cfg *config.Configuration, mongoClient *mongo.Client) *Service {
 	return svc
 }
 
-// getHTTPServer returns an http server
-var getHTTPServer = func(bindAddr string, router http.Handler) HTTPServer {
-	s := dphttp.NewServer(bindAddr, router)
-	s.HandleOSSignals = false
-	return s
-}
-
 // Run the service
 func (svc *Service) Run(ctx context.Context, recipeData map[string]models.Recipe, svcErrors chan error) (err error) {
 	// Get HTTP router and server with middleware
 	router := mux.NewRouter()
 	svc.api = api.NewFoodRecipeAPI(ctx, svc.config.ConnectionString, svc.mongoClient, recipeData, svc.config.DefaultMaxResults, router)
 
-	server := server.New(svc.config.BindAddr, router)
+	s := server.New(svc.config.BindAddr, router)
 
 	// Disable this here to allow main to manage graceful shutdown of the entire app.
-	server.HandleOSSignals = false
+	s.HandleOSSignals = false
 
-	svc.server = server
+	svc.server = s
 
 	// Run the http server in a new go-routine
 	go func() {
@@ -88,7 +80,7 @@ func (svc *Service) Run(ctx context.Context, recipeData map[string]models.Recipe
 // Close gracefully shuts the service down in the required order, with timeout
 func (svc *Service) Close(ctx context.Context) error {
 	timeout := svc.config.GracefulShutdownTimeout
-	log.Event(ctx, "commencing graceful shutdown", log.Data{"graceful_shutdown_timeout": timeout}, log.INFO)
+	log.Info(ctx, "commencing graceful shutdown", log.Data{"graceful_shutdown_timeout": timeout})
 	shutdownContext, cancel := context.WithTimeout(ctx, timeout)
 	hasShutdownError := false
 
@@ -98,10 +90,9 @@ func (svc *Service) Close(ctx context.Context) error {
 
 		// stop any incoming requests
 		if err := svc.server.Shutdown(shutdownContext); err != nil {
-			log.Event(shutdownContext, "failed to shutdown http server", log.Error(err), log.ERROR)
+			log.Error(shutdownContext, "failed to shutdown http server", err)
 			hasShutdownError = true
 		}
-
 	}()
 
 	// wait for shutdown success (via cancel) or failure (timeout)
@@ -109,17 +100,17 @@ func (svc *Service) Close(ctx context.Context) error {
 
 	// timeout expired
 	if shutdownContext.Err() == context.DeadlineExceeded {
-		log.Event(shutdownContext, "shutdown timed out", log.ERROR, log.Error(shutdownContext.Err()))
+		log.Error(shutdownContext, "shutdown timed out", shutdownContext.Err())
 		return shutdownContext.Err()
 	}
 
 	// other error
 	if hasShutdownError {
 		err := errors.New("failed to shutdown gracefully")
-		log.Event(shutdownContext, "failed to shutdown gracefully ", log.ERROR, log.Error(err))
+		log.Error(shutdownContext, "failed to shutdown gracefully ", err)
 		return err
 	}
 
-	log.Event(shutdownContext, "graceful shutdown was successful", log.INFO)
+	log.Info(shutdownContext, "graceful shutdown was successful")
 	return nil
 }

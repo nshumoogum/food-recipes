@@ -8,7 +8,7 @@ import (
 	"github.com/nshumoogum/food-recipes/helpers"
 )
 
-// Recipes ...
+// Recipes contains a list of recipes
 type Recipes struct {
 	Count      int      `json:"count"`
 	Items      []Recipe `json:"items"`
@@ -17,7 +17,7 @@ type Recipes struct {
 	TotalCount int64    `json:"total_count"`
 }
 
-// Recipe ...
+// Recipe contains information of a recipe
 type Recipe struct {
 	ID          string       `bson:"_id,omitempty"               json:"id"`
 	CookTime    int          `bson:"cook_time"                   json:"cook_time"`
@@ -32,7 +32,7 @@ type Recipe struct {
 	Title       string       `bson:"title"                       json:"title"`
 }
 
-// UpdateRecipe ...
+// UpdateRecipe TODO probably needs to be removed and logic using this updated to use Patch
 type UpdateRecipe struct {
 	CookTime    int          `bson:"cook_time"                   json:"cook_time"`
 	Difficulty  string       `bson:"difficulty"                  json:"difficulty"`
@@ -46,14 +46,14 @@ type UpdateRecipe struct {
 	Title       string       `bson:"title"                       json:"title"`
 }
 
-// Location ...
+// Location contains location information for recipe
 type Location struct {
 	CookBook string `bson:"cook_book,omitempty" json:"cook_book,omitempty"`
 	Link     string `bson:"link,omitempty"      json:"link,omitempty"`
 	Page     int    `bson:"page,omitempty"      json:"page,omitempty"`
 }
 
-// Ingredient ...
+// Ingredient contains the ingredient amount
 type Ingredient struct {
 	Item     string `bson:"item"           json:"item"`
 	Quantity int    `bson:"quantity"       json:"quantity"`
@@ -84,7 +84,6 @@ func (recipe *Recipe) Validate() []*ErrorObject {
 
 // Validate recipe creation
 func (updateRecipe *UpdateRecipe) Validate() []*ErrorObject {
-
 	recipe := &Recipe{
 		CookTime:    updateRecipe.CookTime,
 		Difficulty:  updateRecipe.Difficulty,
@@ -218,5 +217,5 @@ func validateLocation(location Location) (err *ErrorObject) {
 		}
 	}
 
-	return
+	return err
 }

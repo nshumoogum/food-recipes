@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ONSdigital/log.go/log"
+	"github.com/ONSdigital/log.go/v2/log"
 	"github.com/nshumoogum/food-recipes/config"
 	"github.com/nshumoogum/food-recipes/models"
 	"github.com/nshumoogum/food-recipes/service"
@@ -32,7 +31,7 @@ func main() {
 	ctx := context.Background()
 
 	if err := run(ctx); err != nil {
-		log.Event(ctx, "application unexpectedly failed", log.ERROR, log.Error(err))
+		log.Fatal(ctx, "application unexpectedly failed", err)
 		os.Exit(1)
 	}
 }
@@ -44,14 +43,14 @@ func run(ctx context.Context) error {
 	// Read config
 	cfg, err := config.Get()
 	if err != nil {
-		log.Event(ctx, "failed to retrieve configuration", log.FATAL, log.Error(err))
+		log.Error(ctx, "failed to retrieve configuration", err)
 		return err
 	}
-	log.Event(ctx, "config on startup", log.INFO, log.Data{"config": cfg})
+	log.Info(ctx, "config on startup", log.Data{"config": cfg})
 
 	if cfg.DownloadData {
-		if err = Download(ctx, cfg.GSURL, cfg.DownloadTimeout); err != nil {
-			return err
+		if downloadErr := Download(ctx, cfg.GSURL, cfg.DownloadTimeout); err != nil {
+			log.Error(ctx, "failed to download data and store in database, continuing to load API", downloadErr)
 		}
 	}
 
@@ -72,21 +71,21 @@ func run(ctx context.Context) error {
 	// Blocks until an os interrupt or a fatal error occurs
 	select {
 	case err := <-svcErrors:
-		log.Event(ctx, "service error received", log.ERROR, log.Error(err))
+		log.Error(ctx, "service error received", err)
 	case sig := <-signals:
-		log.Event(ctx, "os signal received", log.Data{"signal": sig}, log.INFO)
+		log.Info(ctx, "os signal received", log.Data{"signal": sig})
 	}
 
 	return svc.Close(ctx)
 }
 
-// Download data on initialisation
+// Download data on initialisation - TODO needs updating, consider using the API POST request logic
 func Download(ctx context.Context, url string, timeout time.Duration) error {
 	logData := log.Data{"url": url}
-	log.Event(ctx, "downloading data", log.INFO, logData)
+	log.Info(ctx, "downloading data", logData)
 
 	if url == "" {
-		log.Event(ctx, "missing google sheets url, no data loaded", log.WARN, logData)
+		log.Warn(ctx, "missing google sheets url, no data loaded", logData)
 		return nil
 	}
 
@@ -96,25 +95,25 @@ func Download(ctx context.Context, url string, timeout time.Duration) error {
 
 	resp, err := client.Get(url)
 	if err != nil {
-		log.Event(ctx, "cannot download file from the given url", log.ERROR, log.Error(err), logData)
+		log.Error(ctx, "cannot download file from the given url", err, logData)
 		return err
 	}
 
 	if resp.StatusCode != 200 {
-		err := errors.New("response from the URL was" + strconv.Itoa(resp.StatusCode) + "but expecting 200")
-		log.Event(ctx, "unexpected response code", log.ERROR, log.Error(err), logData)
+		err = errors.New("response from the URL was" + strconv.Itoa(resp.StatusCode) + "but expecting 200")
+		log.Error(ctx, "unexpected response code", err, logData)
 		return err
 	}
 
 	if resp.Header["Content-Type"][0] != "text/csv" {
-		err := fmt.Errorf("the file downloaded has content type '%s', expected 'text/csv'", resp.Header["Content-Type"])
-		log.Event(ctx, "unexpected response header", log.ERROR, log.Error(err), logData)
+		err = fmt.Errorf("the file downloaded has content type '%s', expected 'text/csv'", resp.Header["Content-Type"])
+		log.Error(ctx, "unexpected response header", err, logData)
 		return err
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Event(ctx, "unable to read response body", log.ERROR, log.Error(err), logData)
+		log.Error(ctx, "unable to read response body", err, logData)
 		return err
 	}
 
@@ -124,7 +123,7 @@ func Download(ctx context.Context, url string, timeout time.Duration) error {
 	// Scan header row
 	_, err = csvReader.Read()
 	if err != nil {
-		log.Event(ctx, "encountered error when processing header row of csv", log.ERROR, log.Error(err))
+		log.Error(ctx, "encountered error when processing header row of csv", err, logData)
 		return err
 	}
 
@@ -136,7 +135,7 @@ func Download(ctx context.Context, url string, timeout time.Duration) error {
 		}
 		recipeLogData := log.Data{"line_count": count, "csv_line": line}
 		if err != nil {
-			log.Event(ctx, "encountered error reading csv", log.ERROR, log.Error(err), recipeLogData)
+			log.Error(ctx, "encountered error reading csv", err, recipeLogData)
 			break
 		}
 
@@ -179,13 +178,13 @@ func Download(ctx context.Context, url string, timeout time.Duration) error {
 		recipe.CookTime, err = strconv.Atoi(line[7])
 		if err != nil {
 			recipeLogData["cook_time"] = line[3]
-			log.Event(ctx, "cook_time value unreadable", log.WARN, recipeLogData)
+			log.Warn(ctx, "cook_time value unreadable", recipeLogData)
 		}
 
 		recipe.PortionSize, err = strconv.Atoi(line[1])
 		if err != nil {
 			recipeLogData["portion_size"] = line[1]
-			log.Event(ctx, "portion_size value unreadable", log.WARN, recipeLogData)
+			log.Warn(ctx, "portion_size value unreadable", recipeLogData)
 		}
 
 		recipeData[lcTitle] = recipe
@@ -194,7 +193,7 @@ func Download(ctx context.Context, url string, timeout time.Duration) error {
 	}
 
 	logData["count"] = count
-	log.Event(ctx, "successfuly loaded recipe data", log.INFO, logData)
+	log.Info(ctx, "successfuly loaded recipe data", logData)
 
 	return nil
 }
@@ -217,7 +216,7 @@ func getIngredients(ctx context.Context, cell string, logData log.Data) (ingredi
 		quantity, err := strconv.Atoi(ingredientParts[1])
 		if err != nil {
 			logData["quantity"] = ingredientParts[1]
-			log.Event(ctx, "quantity value unreadable", log.WARN, logData)
+			log.Warn(ctx, "quantity value unreadable", logData)
 		}
 
 		ingredientList = append(ingredientList, models.Ingredient{
@@ -238,7 +237,7 @@ func getMongoClient(ctx context.Context, cfg *config.Configuration) (*mongo.Clie
 		cfg.MongoConfig.BindAddr+"/"+cfg.MongoConfig.Database+"?retryWrites=true&w=majority",
 	))
 	if err != nil {
-		log.Event(ctx, "failed to create mongo client", log.ERROR, log.Error(err))
+		log.Error(ctx, "failed to create mongo client", err)
 		return nil, err
 	}
 

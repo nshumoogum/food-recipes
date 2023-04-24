@@ -3,10 +3,9 @@ package api
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"net/http"
 
-	"github.com/ONSdigital/log.go/log"
+	"github.com/ONSdigital/log.go/v2/log"
 	"github.com/gorilla/mux"
 	"github.com/nshumoogum/food-recipes/models"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -39,37 +38,36 @@ func NewFoodRecipeAPI(ctx context.Context, connectionString string, mongoClient 
 func authorise(connectionString string, handler http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
-		logD := log.Data{"requested_uri": req.URL.RequestURI()}
+		logData := log.Data{"requested_uri": req.URL.RequestURI()}
 
 		authValue := req.Header.Get("Authorization")
 
 		// Check connection string
 		if authValue != connectionString || authValue == "" {
-			log.Event(ctx, "caller unauthorised to perform requested action", logD)
+			log.Warn(ctx, "caller unauthorised to perform requested action", logData)
 
 			w.WriteHeader(401)
 			return
 		}
 
-		log.Event(ctx, "caller authorised to perform requested action", logD)
+		log.Info(ctx, "caller authorised to perform requested action", logData)
 		handler(w, req)
 	})
 }
 
 // DrainBody drains the body of the given HTTP request
 func DrainBody(r *http.Request) {
-
 	if r.Body == nil {
 		return
 	}
 
-	_, err := io.Copy(ioutil.Discard, r.Body)
+	_, err := io.Copy(io.Discard, r.Body)
 	if err != nil {
-		log.Event(r.Context(), "error draining request body", log.Error(err))
+		log.Error(r.Context(), "error draining request body", err)
 	}
 
 	err = r.Body.Close()
 	if err != nil {
-		log.Event(r.Context(), "error closing request body", log.Error(err))
+		log.Error(r.Context(), "error closing request body", err)
 	}
 }
