@@ -49,6 +49,10 @@ var (
 	ErrInvalidPortionSize  = errors.New("invalid portion size, cannot be less than 1")
 	ErrUnableToChangeTitle = errors.New("not allowed to change the existing title for recipe")
 
+	ErrInvalidOperation             = errors.New("patch operation is invalid, has to be one of the following: add copy move remove replace test")
+	ErrUnsupportedOperation         = errors.New("patch operation not supported")
+	ErrPathAndFromFieldsCannotMatch = errors.New("path and from values cannot match")
+
 	ErrUnableToParseJSON   = errors.New("failed to parse json body")
 	ErrUnableToReadMessage = errors.New("failed to read message body")
 	ErrInternalServer      = errors.New("internal server error")

@@ -5,16 +5,21 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+
+	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/go-playground/validator/v10"
 
 	"github.com/ONSdigital/log.go/v2/log"
 	"github.com/gorilla/mux"
 	errs "github.com/nshumoogum/food-recipes/apierrors"
 	"github.com/nshumoogum/food-recipes/helpers"
 	"github.com/nshumoogum/food-recipes/models"
+	"github.com/nshumoogum/food-recipes/patch"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -237,6 +242,116 @@ func (api *FoodRecipeAPI) createRecipe(w http.ResponseWriter, req *http.Request)
 	}
 
 	log.Info(ctx, "add recipe: request successful", logData)
+}
+
+// partialRecipeUpdate - how the operations in patch should work: https://jsonpatch.com/#operations
+func (api *FoodRecipeAPI) partialRecipeUpdate(w http.ResponseWriter, req *http.Request) {
+	defer DrainBody(req)
+	ctx := req.Context()
+
+	vars := mux.Vars(req)
+	id := vars["id"]
+	logData := log.Data{"id": id}
+
+	var errorObjects []*models.ErrorObject
+
+	patchJSON, recipePatches, err := patch.Get(ctx, req.Body)
+	if err != nil {
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: err.Error()})
+		ErrorResponse(ctx, w, http.StatusBadRequest, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	// Validate patch request
+	for i, recipePatch := range *recipePatches {
+		if err = recipePatch.Validate(nil); err != nil {
+			if _, ok := err.(*validator.InvalidValidationError); ok {
+				errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+				ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+				return
+			}
+
+			for _, err := range err.(validator.ValidationErrors) {
+				errorObjects = append(errorObjects, models.HandleValidationErrors(strconv.Itoa(i), err.ActualTag(), err.StructField(), err.Value().(string), err.Param()))
+			}
+		}
+	}
+	if len(errorObjects) > 0 {
+		ErrorResponse(ctx, w, http.StatusBadRequest, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	// apply patch against recipe resource
+	p, err := jsonpatch.DecodePatch(patchJSON)
+	if err != nil {
+		log.Error(ctx, "patch recipe: unable to decode patch", err)
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: err.Error()})
+		ErrorResponse(ctx, w, http.StatusBadRequest, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	// find current recipe doc
+	var recipe models.Recipe
+
+	collection := api.MongoClient.Database("food-recipes").Collection("recipes")
+	if err = collection.FindOne(ctx, bson.M{"_id": id}).Decode(&recipe); err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Warn(ctx, "patch recipe: failed to find recipe", log.FormatErrors([]error{err}), logData)
+			errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrRecipeNotFound.Error()})
+			ErrorResponse(ctx, w, http.StatusNotFound, &models.ErrorResponse{Errors: errorObjects})
+			return
+		}
+
+		log.Error(ctx, "patch recipe: failed to find recipe, bad connection?", err)
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+		ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	b, err := json.Marshal(recipe)
+	if err != nil {
+		log.Error(ctx, "patch recipe: error returned from json marshal", err, logData)
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+		ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	// apply patch to existing recipe
+	modified, err := p.Apply(b)
+	if err != nil {
+		log.Error(ctx, "patch recipe: unable to apply patch to recipe", err, logData)
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: err.Error()})
+		ErrorResponse(ctx, w, http.StatusBadRequest, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	err = json.Unmarshal(modified, &recipe)
+	if err != nil {
+		log.Error(ctx, "patch recipe: unmarshal modified recipe into recipe struct", err, logData)
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: err.Error()})
+		ErrorResponse(ctx, w, http.StatusBadRequest, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	// store new recipe
+	if _, err = collection.ReplaceOne(ctx, bson.M{"_id": id}, recipe); err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Error(ctx, "update recipe: failed to update recipe, recipe deos not exists", err, logData)
+			errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrRecipeNotFound.Error()})
+			ErrorResponse(ctx, w, http.StatusNotFound, &models.ErrorResponse{Errors: errorObjects})
+			return
+		}
+
+		log.Error(ctx, "update recipe: failed to insert recipe", err, logData)
+		errorObjects = append(errorObjects, &models.ErrorObject{Error: errs.ErrInternalServer.Error()})
+		ErrorResponse(ctx, w, http.StatusInternalServerError, &models.ErrorResponse{Errors: errorObjects})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	log.Info(ctx, "update recipe: request successful", logData)
 }
 
 func (api *FoodRecipeAPI) updateRecipe(w http.ResponseWriter, req *http.Request) {
